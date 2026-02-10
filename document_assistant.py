@@ -75,3 +75,43 @@ class DocumentAssistant:
             doc_chunks = self._split_into_chunks(text)
             self.chunks.extend(doc_chunks)
         self.embeddings = self.model.encode(self.chunks)
+
+    def _build_prompt(self, query: str, chunks: List[str]) -> str:
+        context = "\n\n---\n\n".join(chunks)
+        prompt = (
+            f"Используй только следующие фрагменты документов для ответа:\n\n"
+            f"{context}\n\n"
+            f"Вопрос: {query}\n"
+            f"Ответ:"
+        )
+        return prompt
+
+    def _call_llm(self, prompt: str) -> str:
+        # Для подключения реальной LLM замените тело этого метода.
+        # Например, можно использовать transformers pipeline:
+        #   from transformers import pipeline
+        #   generator = pipeline("text-generation", model="your-model")
+        #   return generator(prompt, max_new_tokens=256)[0]["generated_text"]
+        #
+        # Или OpenAI API:
+        #   import openai
+        #   response = openai.ChatCompletion.create(
+        #       model="gpt-3.5-turbo",
+        #       messages=[{"role": "user", "content": prompt}]
+        #   )
+        #   return response.choices[0].message.content
+
+        lines = prompt.split("\n")
+        answer_parts = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith("Используй") and not line.startswith("Вопрос:") and not line.startswith("Ответ:") and line != "---":
+                answer_parts.append(line)
+        if answer_parts:
+            return " ".join(answer_parts[:3])
+        return "Не удалось найти ответ в предоставленных документах."
+
+    def answer_query(self, query: str) -> str:
+        relevant_chunks = self._find_relevant_chunks(query)
+        prompt = self._build_prompt(query, relevant_chunks)
+        return self._call_llm(prompt)
