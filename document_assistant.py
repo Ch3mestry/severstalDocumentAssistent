@@ -1,17 +1,21 @@
 import os
 from typing import List
 
+import numpy as np
+from sentence_transformers import SentenceTransformer
 from PyPDF2 import PdfReader
 from docx import Document
 
 
 class DocumentAssistant:
 
-    def __init__(self, chunk_size=500, chunk_overlap=50, top_k=3):
+    def __init__(self, chunk_size=500, chunk_overlap=50, top_k=3, model_name="all-MiniLM-L6-v2"):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.top_k = top_k
         self.chunks = []
+        self.embeddings = None
+        self.model = SentenceTransformer(model_name)
 
     def _extract_text_from_pdf(self, path: str) -> str:
         reader = PdfReader(path)
@@ -53,9 +57,21 @@ class DocumentAssistant:
             start += self.chunk_size - self.chunk_overlap
         return chunks
 
+    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        norm_a = a / np.linalg.norm(a)
+        norm_b = b / np.linalg.norm(b, axis=1, keepdims=True)
+        return np.dot(norm_b, norm_a)
+
+    def _find_relevant_chunks(self, query: str) -> List[str]:
+        query_embedding = self.model.encode(query)
+        scores = self._cosine_similarity(query_embedding, self.embeddings)
+        top_indices = np.argsort(scores)[::-1][:self.top_k]
+        return [self.chunks[i] for i in top_indices]
+
     def index_documents(self, documents: List[str]):
         self.chunks = []
         for doc_path in documents:
             text = self._extract_text(doc_path)
             doc_chunks = self._split_into_chunks(text)
             self.chunks.extend(doc_chunks)
+        self.embeddings = self.model.encode(self.chunks)
